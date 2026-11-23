@@ -181,11 +181,34 @@
     },
   };
 
+  // 사용자 제공 일러스트 스프라이트 (sprites/*.png). face = 원본 그림이 바라보는 방향
+  const SPRITE_FACE = { sukuna: -1, griffin: -1, orochi: 1, jotun: -1, gumiho: 1, amdusias: 1, naga: -1, furfur: 1 };
+  const IMG = {};
+  const ready = Promise.all(Object.keys(SPRITE_FACE).map(id => new Promise(res => {
+    const im = new Image(); im.onload = () => { IMG[id] = im; res(); }; im.onerror = () => res(); im.src = `sprites/${id}.png`;
+  })));
+
   function drawMonster(id, x, y, facing, t, s = 1, alpha = 1, glow = null) {
     ctx.save(); ctx.globalAlpha = alpha;
-    ctx.translate(x, y); ctx.scale(facing * s * sizeScale(id), s * sizeScale(id));
+    const sc = s * sizeScale(id);
+    const im = IMG[id];
+    if (im) {
+      const h = 330 * s * (0.55 + 0.45 * sizeScale(id)) * (1 + 0.015 * Math.sin(t / 6)), w = h * im.width / im.height;
+      ctx.save(); ctx.translate(x, y); ell(0, 4, w * 0.35, 12 * sc, 'rgba(0,0,0,.4)'); ctx.restore();
+      ctx.translate(x, y + 18 * sc);
+      if (facing !== SPRITE_FACE[id]) ctx.scale(-1, 1);
+      if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 35; }
+      ctx.drawImage(im, -w / 2, -h, w, h);
+      ctx.restore();
+      if (glow === '#ff3030') { // 피격 시 붉게 번쩍
+        ctx.save(); ctx.globalAlpha = 0.35 * alpha; ctx.translate(x, y + 18 * sc);
+        if (facing !== SPRITE_FACE[id]) ctx.scale(-1, 1);
+        ctx.filter = 'sepia(1) saturate(8) hue-rotate(-50deg)'; ctx.drawImage(im, -w / 2, -h, w, h); ctx.restore();
+      }
+      return;
+    }
+    ctx.translate(x, y); ctx.scale(facing * sc, sc);
     if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 30; }
-    // 그림자
     ell(0, 2, 90, 12, 'rgba(0,0,0,.35)');
     DRAW[id](t);
     ctx.restore();
@@ -563,7 +586,7 @@
     background(f, '#4a3410');
     const c = T.champion;
     for (let i = 0; i < 40; i++) { const x = hash(i) * W, y = (hash(i * 3) * H + f * (2 + hash(i) * 3)) % H; ctx.fillStyle = ['#ffd83a', '#ff5a5a', '#5ad1ff', '#9aff6a'][i % 4]; ctx.fillRect(x, y, 8, 14); }
-    drawMonster(c, W / 2, 640, 1, f, 1.35, 1, '#ffd83a');
+    drawMonster(c, W / 2, 660, 1, f, 1.1, 1, '#ffd83a');
     text('최종 우승', W / 2, 80, 40, '#fff', 'center');
     text(M[c].name, W / 2, 150, 90, '#ffd83a', 'center');
     text(M[c].title, W / 2, 215, 26, '#9fe0a0', 'center');
@@ -581,7 +604,7 @@
   }
 
   window.Sim = {
-    init(canvas, seed) { ctx = canvas.getContext('2d'); return build(seed); },
+    init(canvas, seed) { ctx = canvas.getContext('2d'); return build(seed); }, ready,
     drawFrame, FPS, get total() { return total; },
     get timeline() { return scenes.map(({ start, dur, kind, label }) => ({ start, dur, kind, label })); }, get result() { return T; },
   };

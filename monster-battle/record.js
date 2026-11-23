@@ -9,7 +9,18 @@ const path = require('path');
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on('pageerror', e => console.error('PAGE ERROR', e));
-  await page.goto('file://' + path.resolve(__dirname, 'index.html') + `?capture=1&seed=${seed}`);
+  // 이미지가 든 캔버스를 읽으려면 file://이 아닌 http로 열어야 한다
+  const http = require('http'), fs0 = require('fs');
+  const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png' };
+  const server = http.createServer((req, res) => {
+    const f = path.join(__dirname, decodeURIComponent(req.url.split('?')[0]));
+    if (!f.startsWith(__dirname) || !fs0.existsSync(f)) { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' });
+    fs0.createReadStream(f).pipe(res);
+  }).listen(0, '127.0.0.1');
+  await new Promise(r => server.once('listening', r));
+  await page.goto(`http://127.0.0.1:${server.address().port}/index.html?capture=1&seed=${seed}`);
+  await page.evaluate(() => Sim.ready);
   const total = await page.evaluate(() => Sim.total);
   const timeline = await page.evaluate(() => Sim.timeline);
   console.log('frames', total, 'seconds', (total / 30).toFixed(1));
@@ -17,7 +28,7 @@ const path = require('path');
   if (stills) {
     const fs = require('fs');
     for (const n of process.argv.filter(a => /^\d+$/.test(a)).slice(1)) fs.writeFileSync(`${out}-${n}.jpg`, Buffer.from(await grab(+n), 'base64'));
-    await browser.close(); return;
+    await browser.close(); server.close(); return;
   }
   const silent = out.replace(/\.mp4$/, '') + '.silent.mp4';
   const ff = spawn('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'image2pipe', '-framerate', '30', '-c:v', 'mjpeg', '-i', '-',
@@ -30,6 +41,7 @@ const path = require('path');
   ff.stdin.end();
   await new Promise(r => ff.on('close', r));
   await browser.close();
+  server.close();
   // 배경음악 합성 후 영상과 합치기
   const fs = require('fs');
   const { execFileSync } = require('child_process');
