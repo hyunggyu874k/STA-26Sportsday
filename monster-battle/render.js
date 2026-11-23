@@ -208,25 +208,25 @@
 
   // ---------- 장면 구성 ----------
   let scenes = [], total = 0, T;
-  function add(dur, draw) { scenes.push({ start: total, dur, draw }); total += dur; }
+  function add(dur, draw, kind, label = '') { scenes.push({ start: total, dur, draw, kind, label }); total += dur; }
 
   function build(seed) {
     T = Engine.tournament(seed);
     scenes = []; total = 0;
-    add(100, sceneTitle);
-    add(170, sceneRoster);
-    add(110, f => sceneBracket(f, 0));
+    add(100, sceneTitle, 'title');
+    add(170, sceneRoster, 'roster');
+    add(110, f => sceneBracket(f, 0), 'bracket');
     T.rounds.forEach((round, ri) => {
       round.matches.forEach((m, mi) => {
         const label = `${round.name} ${round.matches.length > 1 ? (mi + 1) + '경기' : ''}`.trim();
-        add(120, f => sceneVs(f, m, label));
+        add(120, f => sceneVs(f, m, label), 'vs', label);
         const fightDur = (m.events.length - 2) * ACT + 40;
-        add(fightDur, f => sceneFight(f, m, label));
-        add(70, f => sceneResult(f, m));
+        add(fightDur, f => sceneFight(f, m, label), 'fight', label);
+        add(70, f => sceneResult(f, m), 'result', label);
       });
-      if (ri < T.rounds.length - 1) add(100, f => sceneBracket(f, ri + 1));
+      if (ri < T.rounds.length - 1) add(100, f => sceneBracket(f, ri + 1), 'bracket');
     });
-    add(200, sceneChampion);
+    add(200, sceneChampion, 'champion');
     return total;
   }
 
@@ -582,6 +582,7 @@
 
   window.Sim = {
     init(canvas, seed) { ctx = canvas.getContext('2d'); return build(seed); },
-    drawFrame, FPS, get total() { return total; }, get result() { return T; },
+    drawFrame, FPS, get total() { return total; },
+    get timeline() { return scenes.map(({ start, dur, kind, label }) => ({ start, dur, kind, label })); }, get result() { return T; },
   };
 })();
