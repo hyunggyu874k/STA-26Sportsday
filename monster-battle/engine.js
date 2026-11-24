@@ -53,6 +53,19 @@
       if (has(def, 'stun') || has(def, 'bound')) dodge = 0;
       if (opt.sure) dodge = 0;
       if (R() < dodge) return { miss: true, dmg: 0 };
+      // 방어: 방어 자세(guard)면 확실히, 아니면 방어력에 비례한 확률로 막는다
+      const guarding = has(def, 'guard');
+      const canBlock = !has(def, 'stun') && !has(def, 'bound') && !has(def, 'charm');
+      if (canBlock && (guarding || R() < def.s.def * 0.022)) {
+        dmg *= guarding ? 0.35 : 0.55;
+        if (guarding) def.status.guard = 0;
+        let counter = 0;
+        if (kind === 'str' && def.hp > 0 && R() < (guarding ? 0.6 : 0.2) + def.s.int * 0.02) {
+          counter = Math.round((8 + def.s.str * 2.2) * rand(0.85, 1.1));
+          att.hp -= counter; // 반격
+        }
+        return { miss: false, block: true, counter, dmg: Math.round(dmg) };
+      }
       let critChance = 0.05 + att.s.int * 0.015 + (opt.crit || 0);
       if (def.id === 'sukuna') critChance = 0; // 앞뒤의 얼굴: 빈틈이 없다
       const crit = R() < critChance;
@@ -181,6 +194,10 @@
           ev = { actor: F.indexOf(me), name: has(me, 'bound') ? '나뭇가지에 묶여 움직일 수 없다' : '마비되어 움직일 수 없다', fx: 'stuck', hits: [], notes: [] };
           me.status.stun = 0;
           if (has(me, 'bound') && me.s.str >= 8 && R() < 0.5) { me.status.bound = 0; ev.name = '괴력으로 나뭇가지를 끊었다!'; }
+        } else if (!has(me, 'guard') && me.hp < me.maxHp * 0.65 && R() < 0.08 + me.s.def * 0.012) {
+          ev = { actor: F.indexOf(me), name: me.m.guardName, fx: 'guard', hits: [], notes: ['다음 공격을 막고 반격을 노린다'] };
+          me.status.guard = 1;
+          me.sta = Math.min(me.maxSta, me.sta + 15);
         } else {
           ev = act(me, foe);
         }

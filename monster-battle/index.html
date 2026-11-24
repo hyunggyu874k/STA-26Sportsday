@@ -16,7 +16,7 @@
 <script src="render.js"></script>
 <script>
   const q = new URLSearchParams(location.search);
-  const seed = +(q.get('seed') || 5);
+  const seed = +(q.get('seed') || 6);
   Sim.init(document.getElementById('c'), seed);
   if (!q.has('capture')) {
     let n = 0, last = 0;

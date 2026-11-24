@@ -6,6 +6,7 @@ const STAT_NAMES = { str: '힘', mag: '마력', def: '방어력', res: '항마�
 
 const MONSTERS = {
   furfur: {
+    guardName: '박쥐 날개 방패 자세',
     name: '푸르푸르', title: '지옥의 백작', region: '유럽', source: '마법서 〈아르스 게티아〉', length: '약 3m', meters: 3,
     color: '#7b6fd6', style: 'mag',
     stats: { str: 6, mag: 8, def: 5, res: 4, vit: 7, end: 4, spd: 5, int: 7 },
@@ -17,6 +18,7 @@ const MONSTERS = {
     ],
   },
   naga: {
+    guardName: '꼬리 감아 막기 자세',
     name: '나가', title: '뱀의 정령', region: '인도, 동남아시아', source: '인도 신화', length: '3~5m', meters: 4,
     color: '#3f5fd0', style: 'mag',
     stats: { str: 4, mag: 7, def: 4, res: 5, vit: 5, end: 5, spd: 6, int: 7 },
@@ -28,6 +30,7 @@ const MONSTERS = {
     ],
   },
   amdusias: {
+    guardName: '팔로 막기 자세',
     name: '암두시아스', title: '지옥의 연주자', region: '유럽', source: '마법서 〈아르스 게티아〉', length: '약 2.5m', meters: 2.5,
     color: '#7a4a2e', style: 'mag',
     stats: { str: 5, mag: 7, def: 5, res: 6, vit: 5, end: 7, spd: 7, int: 7 },
@@ -39,6 +42,7 @@ const MONSTERS = {
     ],
   },
   gumiho: {
+    guardName: '꼬리 방패 자세',
     name: '구미호', title: '9개의 꼬리를 가진 여우', region: '한국, 중국, 일본', source: '〈삼국사기〉 등', length: '5~6m', meters: 5.5,
     color: '#e8c75a', style: 'mag',
     stats: { str: 5, mag: 9, def: 6, res: 6, vit: 3, end: 3, spd: 6, int: 8 },
@@ -50,6 +54,7 @@ const MONSTERS = {
     ],
   },
   jotun: {
+    guardName: '얼음 갑옷 방어 자세',
     name: '요툰', title: '태고의 거인족', region: '유럽', source: '북유럽 신화', length: '5~8m', meters: 6.5,
     color: '#9fc3ea', style: 'str',
     stats: { str: 8, mag: 5, def: 5, res: 6, vit: 9, end: 8, spd: 5, int: 7 },
@@ -61,6 +66,7 @@ const MONSTERS = {
     ],
   },
   orochi: {
+    guardName: '비늘 방어 자세',
     name: '팔기대사', title: '8갈래의 거대한 뱀', region: '일본', source: '〈일본서기〉', length: '약 150m', meters: 150,
     color: '#8a8f9c', style: 'str',
     stats: { str: 10, mag: 3, def: 9, res: 8, vit: 7, end: 10, spd: 6, int: 3 },
@@ -71,6 +77,7 @@ const MONSTERS = {
     ],
   },
   griffin: {
+    guardName: '날개로 막기 자세',
     name: '그리핀', title: '금광을 지키는 파수꾼', region: '유럽, 서아시아', source: '인도 전설, 서아시아 전설', length: '4~6m', meters: 5,
     color: '#c9a36a', style: 'str',
     stats: { str: 5, mag: 2, def: 5, res: 5, vit: 7, end: 6, spd: 8, int: 4 },
@@ -81,6 +88,7 @@ const MONSTERS = {
     ],
   },
   sukuna: {
+    guardName: '칼·도끼로 막기 자세',
     name: '양면숙나', title: '두 얼굴의 요괴', region: '일본', source: '〈일본서기〉, 〈천광사기〉 등', length: '약 3m', meters: 3,
     color: '#55565e', style: 'str',
     stats: { str: 7, mag: 3, def: 5, res: 5, vit: 5, end: 6, spd: 7, int: 6 },

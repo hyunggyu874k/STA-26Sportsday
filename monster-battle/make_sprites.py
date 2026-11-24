@@ -1,30 +1,21 @@
-"""sprites/source.png(8마리 일러스트)에서 캐릭터별 스프라이트를 잘라낸다.
-배경 제거 대신 가장자리를 부드럽게 투명 처리(페더링)해서 전투 배경에 자연스럽게 섞이게 한다."""
+"""sprites/original/<id>.png(배경이 투명한 원본 일러스트)을 게임용 스프라이트로 정리한다.
+- 투명 여백을 잘라내고
+- 가장자리의 색 번짐(헤일로)을 줄이기 위해 알파를 1px 깎고
+- 높이 560px로 줄여 sprites/<id>.png로 저장"""
 import os
-from PIL import Image, ImageFilter, ImageDraw
+from PIL import Image, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# (x0, y0, x1, y1) — 이름 배너 위까지 자름
-BOXES = {
-    'sukuna':   (0, 0, 325, 386),
-    'griffin':  (345, 0, 718, 386),
-    'orochi':   (752, 0, 1135, 380),
-    'jotun':    (1178, 0, 1536, 386),
-    'gumiho':   (0, 450, 425, 906),
-    'amdusias': (440, 450, 762, 906),
-    'naga':     (795, 450, 1060, 900),
-    'furfur':   (1118, 440, 1536, 902),
-}
+SRC = os.path.join(HERE, 'sprites', 'original')
 
-src = Image.open(os.path.join(HERE, 'sprites', 'source.png')).convert('RGB')
-for name, box in BOXES.items():
-    im = src.crop(box)
-    w, h = im.size
-    m = Image.new('L', (w, h), 0)
-    pad = int(min(w, h) * 0.07)
-    ImageDraw.Draw(m).rounded_rectangle((pad, pad, w - pad, h - int(pad * 0.4)), radius=int(min(w, h) * 0.28), fill=255)
-    m = m.filter(ImageFilter.GaussianBlur(pad * 0.9))
-    out = im.convert('RGBA')
-    out.putalpha(m)
-    out.save(os.path.join(HERE, 'sprites', f'{name}.png'))
-    print(name, out.size)
+for fn in sorted(os.listdir(SRC)):
+    im = Image.open(os.path.join(SRC, fn)).convert('RGBA')
+    a = im.getchannel('A')
+    a = a.point(lambda v: 0 if v < 40 else v)          # 거의 투명한 잔여 픽셀 제거
+    a = a.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.6))
+    im.putalpha(a)
+    im = im.crop(a.point(lambda v: 255 if v > 8 else 0).getbbox())
+    h = 560
+    im = im.resize((round(im.width * h / im.height), h), Image.LANCZOS)
+    im.save(os.path.join(HERE, 'sprites', fn), optimize=True)
+    print(fn, im.size)

@@ -1,7 +1,7 @@
 // 캔버스 렌더러 — 토너먼트 결과를 프레임 단위 장면으로 그린다.
 // drawFrame(n)이 n번째 프레임을 그리므로 실시간 재생과 영상 추출 모두 같은 코드를 쓴다.
 (function () {
-  const W = 1280, H = 720, FPS = 30, ACT = 20;
+  const W = 1280, H = 720, FPS = 30, ACT = 26;
   const FONT = '"Noto Sans KR","NanumGothic","WenQuanYi Zen Hei",sans-serif';
   const M = MONSTERS;
   let ctx;
@@ -182,36 +182,37 @@
   };
 
   // 사용자 제공 일러스트 스프라이트 (sprites/*.png). face = 원본 그림이 바라보는 방향
-  const SPRITE_FACE = { sukuna: -1, griffin: -1, orochi: 1, jotun: -1, gumiho: 1, amdusias: 1, naga: -1, furfur: 1 };
+  const SPRITE_FACE = { sukuna: -1, griffin: 1, orochi: 1, jotun: 1, gumiho: 1, amdusias: 1, naga: 1, furfur: 1 };
   const IMG = {};
   const ready = Promise.all(Object.keys(SPRITE_FACE).map(id => new Promise(res => {
     const im = new Image(); im.onload = () => { IMG[id] = im; res(); }; im.onerror = () => res(); im.src = `sprites/${id}.png`;
   })));
 
-  function drawMonster(id, x, y, facing, t, s = 1, alpha = 1, glow = null) {
-    ctx.save(); ctx.globalAlpha = alpha;
+  function drawMonster(id, x, y, facing, t, s = 1, alpha = 1, glow = null, pose = null) {
     const sc = s * sizeScale(id);
     const im = IMG[id];
-    if (im) {
-      const h = 330 * s * (0.55 + 0.45 * sizeScale(id)) * (1 + 0.015 * Math.sin(t / 6)), w = h * im.width / im.height;
-      ctx.save(); ctx.translate(x, y); ell(0, 4, w * 0.35, 12 * sc, 'rgba(0,0,0,.4)'); ctx.restore();
-      ctx.translate(x, y + 18 * sc);
-      if (facing !== SPRITE_FACE[id]) ctx.scale(-1, 1);
-      if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 35; }
-      ctx.drawImage(im, -w / 2, -h, w, h);
-      ctx.restore();
-      if (glow === '#ff3030') { // 피격 시 붉게 번쩍
-        ctx.save(); ctx.globalAlpha = 0.35 * alpha; ctx.translate(x, y + 18 * sc);
-        if (facing !== SPRITE_FACE[id]) ctx.scale(-1, 1);
-        ctx.filter = 'sepia(1) saturate(8) hue-rotate(-50deg)'; ctx.drawImage(im, -w / 2, -h, w, h); ctx.restore();
-      }
-      return;
+    if (!im) {
+      ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.scale(facing * sc, sc);
+      ell(0, 2, 90, 12, 'rgba(0,0,0,.35)'); DRAW[id](t); ctx.restore(); return;
     }
-    ctx.translate(x, y); ctx.scale(facing * sc, sc);
-    if (glow) { ctx.shadowColor = glow; ctx.shadowBlur = 30; }
-    ell(0, 2, 90, 12, 'rgba(0,0,0,.35)');
-    DRAW[id](t);
-    ctx.restore();
+    const p = pose || { rot: 0, sx: 1, sy: 1 + 0.015 * Math.sin(t / 6) };
+    const h = 300 * s * (0.6 + 0.4 * sizeScale(id)), w = h * im.width / im.height;
+    const flip = facing !== SPRITE_FACE[id] ? -1 : 1;
+    // 그림자는 땅에 (점프 중이면 작아짐)
+    const lift = pose ? clamp((GROUND - y) / 300, 0, 0.8) : 0;
+    ctx.save(); ctx.globalAlpha = alpha * (1 - lift * 0.6);
+    ell(x, pose ? GROUND + 4 : y + 4, w * 0.36 * (1 - lift * 0.5), 13 * sc * (1 - lift * 0.5), 'rgba(0,0,0,.45)'); ctx.restore();
+    const paint = filter => {
+      ctx.save(); ctx.globalAlpha = filter ? alpha * 0.45 : alpha;
+      ctx.translate(x, y); ctx.rotate(p.rot * facing); ctx.scale(p.sx * flip, p.sy);
+      if (glow && !filter) { ctx.shadowColor = glow; ctx.shadowBlur = 30; }
+      if (filter) ctx.filter = filter;
+      ctx.drawImage(im, -w / 2, -h + 8, w, h);
+      ctx.restore();
+    };
+    paint(null);
+    if (glow === '#ff3030') paint('brightness(1.4) sepia(1) saturate(8) hue-rotate(-50deg)');
+    if (glow === '#5ad1ff') paint('brightness(1.5) sepia(1) saturate(5) hue-rotate(160deg)');
   }
 
   // ---------- 능력치 차트 (도감식 원형) ----------
@@ -363,8 +364,8 @@
 
   // ---- 전투 ----
   const FX_COLOR = { lightning: '#fff36a', storm: '#bcd6ff', poison: '#6dff6a', ice: '#aee8ff', charm: '#ff8ad8', branches: '#8a5a2a', music: '#ffd83a' };
-  const STATUS_KO = { poison: ['중독', '#3c3'], stun: ['마비', '#cc3'], bound: ['속박', '#a63'], charm: ['현혹', '#e6c'], slow: ['둔화', '#39c'], fly: ['비행', '#88f'], forged: ['무장', '#c84'], weather: ['폭우', '#47a'] };
-  const HOME = [330, 950], GROUND = 610;
+  const STATUS_KO = { poison: ['중독', '#3c3'], stun: ['마비', '#cc3'], bound: ['속박', '#a63'], charm: ['현혹', '#e6c'], slow: ['둔화', '#39c'], fly: ['비행', '#88f'], forged: ['무장', '#c84'], weather: ['폭우', '#47a'], guard: ['방어', '#2a9fd0'] };
+  const HOME = [300, 980], GROUND = 600;
 
   function hud(m, st, i) {
     const id = m.ids[i], right = i === 1;
@@ -475,70 +476,164 @@
     }
   }
 
+  // ---- 전투 동작(안무) ----
+  // 한 행동(ACT 프레임) 안에서: 공격자는 돌진→예비동작→타격→복귀, 방어자는 피격 넉백/막기/회피/반격.
+  const MELEE = ['claw', 'slash', 'triple', 'bite', 'eightbite', 'horn', 'smash', 'slam', 'dive'];
+  const PROJ = ['poison', 'ice', 'wind', 'music'];
+  const MAGIC = ['lightning', 'storm', 'branches', 'charm', 'rain', ...PROJ];
+  const impactOf = ev => MELEE.includes(ev.fx) ? (ev.fx === 'dive' ? 13 : 12) : 11;
+  const FLYERS = { furfur: 1, griffin: 1 };
+
+  function resultOf(ev) {
+    const h = ev.hits || [];
+    return {
+      hit: h.some(x => !x.miss && !x.block), block: h.some(x => x.block), miss: h.length > 0 && h.every(x => x.miss),
+      crit: h.some(x => x.crit), counter: h.reduce((s, x) => s + (x.counter || 0), 0),
+    };
+  }
+
+  function poseOf(m, evs, i, f) {
+    const id = m.ids[i], dir = i === 0 ? 1 : -1, home = HOME[i];
+    let x = home + Math.sin(f / 23 + i * 2) * 22;           // 제자리 스텝
+    let y = GROUND - Math.abs(Math.sin(f / 9 + i)) * 5;      // 들썩임
+    if (FLYERS[id]) y = GROUND - 45 - Math.sin(f / 7 + i) * 12; // 날개 달린 몬스터는 떠 있음
+    let rot = id === 'naga' ? Math.sin(f / 12) * 0.05 : Math.sin(f / 15 + i) * 0.02;
+    let sx = 1, sy = 1 + Math.sin(f / 8 + i) * 0.015, trail = false, flash = null;
+    const endF = evs.length * ACT;
+    if (f >= endF) {
+      const k = clamp((f - endF) / 22, 0, 1);
+      if (m.ids[i] !== m.winner) { rot = -0.9 * ease(k); y = GROUND + 30 * ease(k); x -= dir * 60 * ease(k); }
+      else { y -= Math.abs(Math.sin((f - endF) / 6)) * 50 * (k < 1 ? 1 : 0.6); }
+      return { x, y, rot, sx, sy, trail, flash };
+    }
+    const idx = Math.floor(f / ACT), lf = f - idx * ACT, ev = evs[idx], I = impactOf(ev), r = resultOf(ev);
+    const gap = Math.abs(HOME[1] - HOME[0]);
+    if (i === ev.actor) {
+      if (MELEE.includes(ev.fx)) {
+        const reach = id === 'orochi' ? 170 : gap - 270;
+        const near = home + dir * reach;
+        if (ev.fx === 'dive') {
+          if (lf < 8) { const k = ease(lf / 8); x = lerp(x, near, k); y -= 230 * k; rot = -0.2; trail = true; }
+          else if (lf < I - 1) { x = near; y -= 230; rot = -0.3; }
+          else if (lf < I + 3) { const k = ease((lf - I + 1) / 3); x = near + dir * 40; y = lerp(y - 230, y, k); rot = 0.45; trail = true; }
+          else { const k = ease((lf - I - 3) / (ACT - I - 3)); x = lerp(near + dir * 40, x, k); y -= Math.sin(k * Math.PI) * 80; }
+        } else if (lf < 8) { const k = ease(lf / 8); x = lerp(x, near, k); y -= Math.abs(Math.sin(lf * 0.8)) * 16; rot = 0.12; trail = true; }
+        else if (lf < I - 1) { x = near - dir * 30; rot = -0.14; sx = 0.94; sy = 1.06; }     // 예비 동작
+        else if (lf < I + 3) { x = near + dir * 40; rot = 0.24; sx = 1.08; sy = 0.95; trail = true; } // 타격
+        else { const k = ease((lf - I - 3) / (ACT - I - 3)); x = lerp(near + dir * 40, x, k); y -= Math.sin(k * Math.PI) * 55; rot = -0.12 * (1 - k); }
+        if (r.counter && lf >= I + 4 && lf < I + 12) { const k = (lf - I - 4) / 8; x -= dir * 70 * Math.sin(k * Math.PI / 2); rot -= 0.25 * (1 - k); if (lf < I + 8) flash = 'hit'; }
+      } else if (MAGIC.includes(ev.fx)) {
+        if (lf < I) { const k = ease(lf / I); y -= 35 * k; const p = 1 + 0.05 * Math.sin(lf * 1.6); sx = p; sy = p; rot = -0.07; flash = lf > 3 ? 'cast' : null; }
+        else { const k = ease((lf - I) / 10); x -= dir * 35 * (1 - k); y -= 35 * (1 - k); rot = -0.1 * (1 - k); }
+      } else {
+        switch (ev.fx) {
+          case 'guard': { const k = Math.min(1, lf / 5); sx = 1 + 0.06 * k; sy = 1 - 0.09 * k; rot = -0.08 * k; flash = lf < 14 ? 'guard' : null; break; }
+          case 'rest': sy = 0.93; rot = 0.1; break;
+          case 'stuck': x += Math.sin(lf * 3) * 7; break;
+          case 'confuse': rot = Math.sin(lf / 2) * 0.28; if (lf > 10 && lf < 16) flash = 'hit'; break;
+          case 'fly': y -= 70 * ease(lf / 10); break;
+          case 'forge': { const p = 1 + 0.06 * Math.sin(lf * 0.9); sx = p; sy = p; flash = 'cast'; break; }
+        }
+      }
+    } else if (ev.hits && ev.hits.length) {
+      if (r.miss && lf >= I - 4 && lf < I + 8) {                      // 회피: 뒤로 뛰어오름
+        const k = (lf - I + 4) / 12; x -= dir * 100 * Math.sin(k * Math.PI); y -= 80 * Math.sin(k * Math.PI); rot = -0.18 * Math.sin(k * Math.PI); trail = true;
+      } else if (r.block && !r.hit && lf >= I - 5) {                  // 막기: 웅크리고 밀려남
+        const k = Math.min(1, (lf - I + 5) / 4), rel = 1 - ease((lf - I - 6) / 8);
+        sx = 1 + 0.05 * k * rel; sy = 1 - 0.08 * k * rel; rot = -0.1 * k * rel;
+        if (lf >= I) x -= dir * 28 * ease(Math.min(1, (lf - I) / 3)) * rel;
+        if (lf >= I && lf < I + 4) flash = 'guard';
+      } else if (lf >= I) {                                           // 피격: 넉백
+        const amt = r.crit ? 120 : 65;
+        const kb = amt * ease(Math.min(1, (lf - I) / 4)) * (1 - ease((lf - I - 6) / 12));
+        x -= dir * kb + (ev.hits.length > 1 && lf < I + 8 ? Math.sin(lf * 3) * 6 : 0);
+        rot = -0.22 * kb / amt; sx = 1 - 0.04 * kb / amt;
+        if (r.crit) y -= 40 * Math.sin(Math.min(1, (lf - I) / 10) * Math.PI);
+        if (lf < I + 5) flash = 'hit';
+      }
+      if (r.counter && lf >= I + 3 && lf < I + 11) { const c = (lf - I - 3) / 8; x += dir * 150 * Math.sin(c * Math.PI); rot = 0.25 * Math.sin(c * Math.PI); trail = true; flash = null; } // 반격
+    }
+    return { x, y, rot, sx, sy, trail, flash };
+  }
+
+  function drawFighter(m, i, p, f, alpha = 1) {
+    const glow = p.flash === 'hit' ? '#ff3030' : p.flash === 'guard' ? '#5ad1ff' : p.flash === 'cast' ? '#ffe27a' : null;
+    drawMonster(m.ids[i], p.x, p.y, i === 0 ? 1 : -1, f, 1, alpha, glow, p);
+  }
+
+  function shield(x, y, facing, a) {
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(x + facing * 110, y);
+    ctx.shadowColor = '#5ad1ff'; ctx.shadowBlur = 25; ctx.strokeStyle = '#9ff0ff'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.ellipse(0, 0, 45, 130, 0, facing > 0 ? -1.3 : Math.PI - 1.3, facing > 0 ? 1.3 : Math.PI + 1.3); ctx.stroke();
+    ctx.fillStyle = 'rgba(90,209,255,.18)'; ctx.fill();
+    for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(facing * 10, k * 40 - 15); ctx.lineTo(facing * 30, k * 40); ctx.lineTo(facing * 10, k * 40 + 15); ctx.stroke(); }
+    ctx.restore();
+  }
+
   function sceneFight(f, m, label) {
     const evs = m.events.slice(1, -1);
+    const endF = evs.length * ACT;
+    const done = f >= endF;
     const idx = clamp(Math.floor(f / ACT), 0, evs.length - 1);
     const lf = f - idx * ACT;
     const ev = evs[idx];
+    const I = impactOf(ev), r = resultOf(ev);
     const prev = idx === 0 ? m.events[0].state : evs[idx - 1].state;
-    const done = f >= evs.length * ACT;
     const cur = done ? m.events.at(-1).state : ev.state;
-    const k = done ? 1 : ease((lf - 6) / 8);
+    const k = done ? 1 : ev.hits.length ? ease((lf - I) / 6) : ease((lf - 6) / 8);
     const st = [0, 1].map(i => ({ hp: lerp(prev[i].hp, cur[i].hp, k), sta: lerp(prev[i].sta, cur[i].sta, k), status: (k > 0.5 ? cur : prev)[i].status }));
 
     let shake = 0;
-    if (!done && ['smash', 'slam', 'storm', 'lightning', 'eightbite'].includes(ev.fx) && lf > 6 && lf < 14) shake = 8;
+    if (!done && lf >= I && lf < I + 6 && (r.crit || ['smash', 'slam', 'storm', 'lightning', 'eightbite', 'dive'].includes(ev.fx))) shake = r.crit ? 14 : 8;
+    if (!done && r.block && lf >= I && lf < I + 3) shake = Math.max(shake, 5);
     ctx.save(); ctx.translate((hash(f) - 0.5) * shake, (hash(f + 1) - 0.5) * shake);
     background(f, '#1b2a6b');
     ctx.fillStyle = '#1a1a22'; ctx.fillRect(-20, GROUND, W + 40, H - GROUND + 20);
     ctx.fillStyle = '#2a2a36'; ctx.fillRect(-20, GROUND, W + 40, 6);
-    // 나가의 날씨 조작: 비가 계속 내림
     if (st.some(s => s.status.includes('weather'))) { ctx.fillStyle = 'rgba(10,20,50,.25)'; ctx.fillRect(0, 0, W, H); rainDrops(f, 90, 'rgba(150,180,255,.45)'); }
 
-    const a = done ? -1 : ev.actor;
-    const pos = [0, 1].map(i => {
-      let x = HOME[i], y = GROUND;
-      const dir = i === 0 ? 1 : -1;
-      const melee = !done && ['claw', 'slash', 'triple', 'bite', 'eightbite', 'horn', 'smash', 'slam', 'dive'].includes(ev.fx);
-      if (i === a && melee) { const l = lf < 7 ? ease(lf / 7) : 1 - ease((lf - 9) / 8); x += dir * (m.ids[i] === 'orochi' ? 120 : 330) * l; if (ev.fx === 'dive') y -= 200 * Math.sin(Math.min(1, lf / 9) * Math.PI) * (lf < 9 ? 1 : 0); }
-      if (st[i].status.includes('fly')) y -= 80 + Math.sin(f / 5) * 10;
-      if (!done && i !== a && ev.hits.some(h => !h.miss) && lf > 7 && lf < 15) x -= dir * 12 * Math.sin(lf * 2);
-      if (!done && i !== a && ev.hits.length && ev.hits.every(h => h.miss) && lf > 5 && lf < 15) x -= dir * 60 * Math.sin((lf - 5) / 10 * Math.PI);
-      if (done && i !== M[m.winner] && m.ids[i] !== m.winner) y += 0;
-      return { x, y };
-    });
-    [0, 1].forEach(i => {
+    const P = [0, 1].map(i => poseOf(m, evs, i, f));
+    const a = done ? -1 : ev.actor, t = 1 - a;
+    // 공격하는 쪽을 앞에 그린다 (막기 후 반격 중이면 방어자를 앞에)
+    let order = a === 0 ? [1, 0] : [0, 1];
+    if (!done && r.counter && lf >= I + 3) order = order.reverse();
+    if (done) order = m.ids[0] === m.winner ? [1, 0] : [0, 1];
+    order.forEach(i => {
+      if (P[i].trail) [6, 3].forEach((back, bi) => drawFighter(m, i, poseOf(m, evs, i, Math.max(0, f - back)), f - back, 0.18 + bi * 0.12));
       const loser = done && m.ids[i] !== m.winner;
-      const alpha = loser ? clamp(1 - (f - evs.length * ACT) / 30, 0.25, 1) : 1;
-      const hitFlash = !done && i !== a && ev.hits.some(h => !h.miss) && lf > 7 && lf < 11;
-      const glow = !done && i === a && ['lightning', 'storm', 'ice', 'charm', 'branches', 'forge', 'music', 'rain'].includes(ev.fx) && lf < 12 ? (FX_COLOR[ev.fx] || '#fff') : hitFlash ? '#ff3030' : null;
-      ctx.save();
-      if (loser) { ctx.translate(pos[i].x, pos[i].y); ctx.rotate((i === 0 ? -1 : 1) * clamp((f - evs.length * ACT) / 20, 0, 1) * 0.5); ctx.translate(-pos[i].x, -pos[i].y); }
-      drawMonster(m.ids[i], pos[i].x, pos[i].y, i === 0 ? 1 : -1, f, 1, alpha, glow);
-      ctx.restore();
+      drawFighter(m, i, P[i], f, loser ? clamp(1 - (f - endF) / 40, 0.35, 1) : 1);
+      // 착지 먼지
+      if (!done && i === a && MELEE.includes(ev.fx) && lf === 8) for (let d = 0; d < 8; d++) ell(P[i].x + (hash(d) - 0.5) * 140, GROUND - hash(d + 3) * 20, 14, 7, 'rgba(200,200,220,.35)');
     });
 
     if (!done) {
-      const t = 1 - a, dir = a === 0 ? 1 : -1;
-      const tx = ev.fx === 'confuse' || ev.fx === 'rest' || ev.fx === 'stuck' || ev.fx === 'forge' || ev.fx === 'fly' ? pos[a].x : pos[t].x;
-      drawFx(ev.fx, lf, pos[a].x, tx, GROUND - 130, dir, idx * 5 + 1);
-      // 피해 숫자
-      if (lf >= 8) {
-        const up = (lf - 8) * 3;
+      const dir = a === 0 ? 1 : -1;
+      const self = ['confuse', 'rest', 'stuck', 'forge', 'fly', 'guard'].includes(ev.fx);
+      const tx = self ? P[a].x : P[t].x;
+      const shift = PROJ.includes(ev.fx) ? I - 13 : ev.hits.length ? I - 5 : 0;
+      if (!(r.miss && MELEE.includes(ev.fx))) drawFx(ev.fx, lf - shift, P[a].x, tx, GROUND - 150, dir, idx * 5 + 1);
+      if (ev.fx === 'guard' && lf < 18) shield(P[a].x, GROUND - 170, a === 0 ? 1 : -1, 1 - lf / 18);
+      if (r.block && lf >= I - 1 && lf < I + 9) shield(P[t].x, GROUND - 170, t === 0 ? 1 : -1, 1 - (lf - I + 1) / 10);
+      if (r.counter && lf >= I + 4 && lf < I + 14) drawFx('slash', lf - I + 1, P[t].x, P[a].x, GROUND - 160, -dir, idx + 9);
+      // 숫자
+      if (lf >= I) {
+        const up = (lf - I) * 3;
         ev.hits.forEach((h, hi) => {
-          const x = pos[t].x + (ev.hits.length > 1 ? (hi - (ev.hits.length - 1) / 2) * 42 : 0);
-          const y = GROUND - 280 - up - (hi % 2) * 22;
+          const x = P[t].x + (ev.hits.length > 1 ? (hi - (ev.hits.length - 1) / 2) * 42 : 0);
+          const y = GROUND - 330 - up - (hi % 2) * 22;
           if (h.miss) text('회피!', x, y, 30, '#9cf', 'center');
-          else text(`${h.dmg}${h.crit ? '!' : ''}`, x, y, h.crit ? 40 : 32, h.crit ? '#ff5050' : '#fff', 'center');
+          else if (h.block) text(`${h.dmg}`, x, y, 26, '#7fe6ff', 'center');
+          else text(`${h.dmg}${h.crit ? '!' : ''}`, x, y, h.crit ? 42 : 32, h.crit ? '#ff5050' : '#fff', 'center');
         });
-        if (ev.self) text(`-${ev.self}`, pos[a].x, GROUND - 280 - up, 34, '#ff7ad0', 'center');
-        if (ev.poison) text(`독 -${ev.poison}`, pos[a].x, GROUND - 240 - up, 22, '#6f6', 'center');
-        if (ev.regen) text(`재생 +${ev.regen}`, pos[a].x, GROUND - 210 - up, 22, '#8ff', 'center');
+        if (r.block && !r.hit) text('막기!', P[t].x, GROUND - 390 - up, 34, '#7fe6ff', 'center');
+        if (r.counter && lf >= I + 5) text(`반격! -${r.counter}`, P[a].x, GROUND - 360 - (lf - I - 5) * 3, 32, '#ffb040', 'center');
+        if (ev.self) text(`-${ev.self}`, P[a].x, GROUND - 330 - up, 34, '#ff7ad0', 'center');
+        if (ev.poison) text(`독 -${ev.poison}`, P[a].x, GROUND - 290 - up, 22, '#6f6', 'center');
+        if (ev.regen) text(`재생 +${ev.regen}`, P[a].x, GROUND - 260 - up, 22, '#8ff', 'center');
       }
-      // 스킬 이름 배너
       const ba = ease(lf / 4);
       ctx.globalAlpha = ba;
-      rrect(W / 2 - 300, 150, 600, 64, 32); ctx.fillStyle = a === 0 ? 'rgba(30,90,200,.85)' : 'rgba(180,40,60,.85)'; ctx.fill();
+      rrect(W / 2 - 300, 150, 600, 64, 32); ctx.fillStyle = ev.fx === 'guard' ? 'rgba(30,140,170,.85)' : a === 0 ? 'rgba(30,90,200,.85)' : 'rgba(180,40,60,.85)'; ctx.fill();
       text(`${M[m.ids[a]].name}의 ${ev.name}`, W / 2, 182, 30, '#fff', 'center');
       ctx.globalAlpha = 1;
     }
@@ -548,13 +643,12 @@
     rrect(W / 2 - 80, 120, 160, 26, 13); ctx.fillStyle = 'rgba(31,157,85,.9)'; ctx.fill();
     text(label, W / 2, 133, 15, '#fff', 'center');
 
-    // 전투 기록
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, H - 92, W, 92);
     const lines = [];
     for (let i = Math.max(0, idx - 2); i <= Math.min(idx, evs.length - 1); i++) lines.push(logLine(m, evs[i]));
     lines.forEach((l, i) => text(l, 24, H - 74 + i * 28, 18, i === lines.length - 1 ? '#fff' : '#999', 'left', 'normal', false));
     if (done) {
-      const p = ease((f - evs.length * ACT) / 20);
+      const p = ease((f - endF) / 20);
       ctx.globalAlpha = p;
       text('K.O.!', W / 2, 330, 120, '#ff4040', 'center');
       ctx.globalAlpha = 1;
@@ -566,6 +660,9 @@
     let s = `▶ ${me}: ${e.name}`;
     const dealt = e.hits.filter(h => !h.miss);
     if (e.hits.length) s += dealt.length ? ` → ${foe}에게 ${dealt.reduce((a, h) => a + h.dmg, 0)} 피해${e.hits.length > 1 ? ` (${dealt.length}/${e.hits.length}회 명중)` : ''}${dealt.some(h => h.crit) ? ' 치명타!' : ''}` : ` → ${foe} 회피!`;
+    const blk = e.hits.filter(h => h.block).length, ctr = e.hits.reduce((s, h) => s + (h.counter || 0), 0);
+    if (blk) s += ` · ${foe} 막기${blk > 1 ? ` ${blk}회` : ''}`;
+    if (ctr) s += ` · ${foe}의 반격 ${ctr}`;
     if (e.self) s += ` (${e.self} 자해)`;
     if (e.notes.length) s += ' · ' + e.notes.join(' · ');
     return s;
