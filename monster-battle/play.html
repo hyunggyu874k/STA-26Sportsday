@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>몬스터 대전 — 조작형 대전 게임</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #05081a; color: #fff; font-family: "Noto Sans KR", "NanumGothic", "WenQuanYi Zen Hei", sans-serif; height: 100%; }
+  body { display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
+  button { font-family: inherit; cursor: pointer; }
+  #stage { position: relative; width: min(100vw, 177.7vh * .72, 1280px); aspect-ratio: 16 / 9; flex: none; }
+  #c { width: 100%; height: 100%; display: block; background: #000; }
+  .overlay { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    background: rgba(3, 6, 20, .82); padding: 2%; }
+  .overlay.on { display: flex; }
+  h1 { color: #ffd83a; margin: 0 0 .2em; font-size: clamp(22px, 5vw, 56px); text-shadow: 0 3px 0 #000; }
+  h2 { margin: 0 0 .4em; font-size: clamp(16px, 3vw, 32px); }
+  .btn { background: linear-gradient(#2f6df0, #1a44b0); color: #fff; border: 2px solid #9cc0ff; border-radius: 12px; padding: .55em 1.2em;
+    font-size: clamp(14px, 2.2vw, 22px); font-weight: bold; margin: .3em; }
+  .btn.gold { background: linear-gradient(#f0b52f, #b07a12); border-color: #ffe7a0; color: #1b1000; }
+  .btn.gray { background: #333a4a; border-color: #667; }
+  .btn:disabled { opacity: .4; cursor: default; }
+
+  /* 캐릭터 선택 */
+  #select { width: min(100vw, 1280px); padding: 10px; display: none; }
+  #select.on { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  @media (max-width: 700px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  .card { background: linear-gradient(#10183c, #070b1e); border: 3px solid #2a3566; border-radius: 14px; padding: 6px; text-align: center; cursor: pointer; position: relative; }
+  .card img { width: 100%; height: 120px; object-fit: contain; filter: drop-shadow(0 6px 10px #000); }
+  .card .t { color: #9fe0a0; font-size: 12px; }
+  .card .n { color: #ffd83a; font-size: 20px; font-weight: bold; }
+  .card.p1 { border-color: #3f8cff; box-shadow: 0 0 18px #3f8cff; }
+  .card.p2 { border-color: #ff4a5a; box-shadow: 0 0 18px #ff4a5a; }
+  .card .tag { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 8px; font-size: 12px; font-weight: bold; }
+  .bars { display: grid; grid-template-columns: auto 1fr; gap: 1px 6px; font-size: 11px; text-align: left; margin-top: 4px; }
+  .bar { height: 7px; background: #222a44; border-radius: 4px; margin-top: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #2f8cff; }
+  .row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; margin: 6px 0; }
+  .seg button { background: #1a2140; color: #ccd; border: 2px solid #3a4470; border-radius: 10px; padding: .4em .9em; font-size: 15px; }
+  .seg button.on { background: #ffd83a; color: #1b1000; border-color: #fff2b0; font-weight: bold; }
+  #detail { background: #0b1230; border: 2px solid #2a3566; border-radius: 12px; padding: 8px 12px; margin-top: 8px; font-size: 14px; min-height: 60px; }
+  #detail b { color: #ffe680; }
+
+  /* 전투 명령 패널 */
+  #panel { width: min(100vw, 1280px); padding: 8px; display: none; }
+  #panel.on { display: block; }
+  #turn { font-size: clamp(14px, 2.4vw, 20px); font-weight: bold; margin-bottom: 6px; min-height: 1.4em; }
+  #cmds { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+  .cmd { text-align: left; background: linear-gradient(#1f3a8a, #12235a); color: #fff; border: 2px solid #5f86ff; border-radius: 12px; padding: 8px 10px; }
+  .cmd:hover:not(:disabled) { filter: brightness(1.25); }
+  .cmd .k { display: inline-block; background: #fff; color: #12235a; border-radius: 6px; padding: 0 6px; font-size: 12px; margin-right: 4px; font-weight: bold; }
+  .cmd .nm { font-size: 17px; font-weight: bold; }
+  .cmd .ty { font-size: 11px; padding: 1px 6px; border-radius: 6px; margin-left: 4px; }
+  .cmd .d { font-size: 12px; color: #c8d4ff; margin-top: 3px; }
+  .cmd .c { float: right; font-size: 12px; color: #9cf; }
+  .cmd.guard { background: linear-gradient(#167a8a, #0d4752); border-color: #5ad1ff; }
+  .cmd.rest { background: linear-gradient(#3a5a2a, #20361a); border-color: #9be07a; }
+  .cmd:disabled { opacity: .38; cursor: default; }
+  .ty.물리 { background: #c0482e; } .ty.마법 { background: #7a4ad0; } .ty.보조 { background: #2a8a5a; } .ty.방어 { background: #1b8fb0; } .ty.회복 { background: #4a7a2a; }
+  .tools { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; flex-wrap: wrap; }
+  .tools button { background: #1a2140; color: #ccd; border: 1px solid #3a4470; border-radius: 8px; padding: 4px 10px; font-size: 13px; }
+  .tools button.on { background: #ffd83a; color: #000; }
+  #bracket { font-size: clamp(12px, 1.8vw, 18px); line-height: 1.7; margin: 8px 0; }
+  #bracket .me { color: #6fb0ff; font-weight: bold; }
+  #bracket .lost { color: #777; text-decoration: line-through; }
+  .help { font-size: 12px; color: #8a93b8; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div id="select">
+  <h1 style="text-align:center">몬스터 대전</h1>
+  <div style="text-align:center;color:#9fc3ff;font-size:14px" id="selHint">① 내가 조종할 몬스터를 고르세요</div>
+  <div class="row">
+    <span>모드</span>
+    <span class="seg" id="modeSeg"><button data-v="tour" class="on">토너먼트 (3연승)</button><button data-v="vs">1:1 대전</button></span>
+    <span>난이도</span>
+    <span class="seg" id="diffSeg"><button data-v="0.8">쉬움</button><button data-v="1" class="on">보통</button><button data-v="1.25">어려움</button></span>
+  </div>
+  <div class="row">
+    <button class="btn gold" id="startBtn" disabled>전투 시작!</button>
+    <a class="btn gray" href="index.html" style="text-decoration:none">시뮬레이션 영상 보기</a>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div id="detail">몬스터를 누르면 능력과 기술이 표시됩니다.</div>
+</div>
+
+<div id="stage" style="display:none">
+  <canvas id="c" width="1280" height="720"></canvas>
+  <div class="overlay" id="ovBracket">
+    <h2 id="brTitle">토너먼트</h2>
+    <div id="bracket"></div>
+    <button class="btn gold" id="brGo">다음 경기 시작</button>
+  </div>
+  <div class="overlay" id="ovResult">
+    <h1 id="resTitle">승리!</h1>
+    <h2 id="resSub"></h2>
+    <div class="row" id="resBtns"></div>
+  </div>
+</div>
+
+<div id="panel">
+  <div id="turn"></div>
+  <div id="cmds"></div>
+  <div class="tools">
+    <button id="autoBtn">자동 전투: 끔</button>
+    <button id="speedBtn">속도: 보통</button>
+    <button id="soundBtn">소리: 켬</button>
+    <button id="quitBtn">캐릭터 선택으로</button>
+  </div>
+  <div class="help">숫자 키 1~6으로도 기술을 고를 수 있습니다. 방어 자세는 다음 공격을 크게 줄이고 반격 기회를 만듭니다.</div>
+</div>
+
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="render.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

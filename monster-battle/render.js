@@ -494,12 +494,14 @@
 
   function poseOf(m, evs, i, f) {
     const id = m.ids[i], dir = i === 0 ? 1 : -1, home = HOME[i];
-    let x = home + Math.sin(f / 23 + i * 2) * 22;           // 제자리 스텝
-    let y = GROUND - Math.abs(Math.sin(f / 9 + i)) * 5;      // 들썩임
-    if (FLYERS[id]) y = GROUND - 45 - Math.sin(f / 7 + i) * 12; // 날개 달린 몬스터는 떠 있음
-    let rot = id === 'naga' ? Math.sin(f / 12) * 0.05 : Math.sin(f / 15 + i) * 0.02;
-    let sx = 1, sy = 1 + Math.sin(f / 8 + i) * 0.015, trail = false, flash = null;
+    const g = f + (m.clock || 0); // 대기 중에도 계속 흐르는 시계 (조작 모드)
+    let x = home + Math.sin(g / 23 + i * 2) * 22;           // 제자리 스텝
+    let y = GROUND - Math.abs(Math.sin(g / 9 + i)) * 5;      // 들썩임
+    if (FLYERS[id]) y = GROUND - 45 - Math.sin(g / 7 + i) * 12; // 날개 달린 몬스터는 떠 있음
+    let rot = id === 'naga' ? Math.sin(g / 12) * 0.05 : Math.sin(g / 15 + i) * 0.02;
+    let sx = 1, sy = 1 + Math.sin(g / 8 + i) * 0.015, trail = false, flash = null;
     const endF = evs.length * ACT;
+    if (f >= endF && m.live && m.winner == null) return { x, y, rot, sx, sy, trail, flash }; // 입력 대기 중
     if (f >= endF) {
       const k = clamp((f - endF) / 22, 0, 1);
       if (m.ids[i] !== m.winner) { rot = -0.9 * ease(k); y = GROUND + 30 * ease(k); x -= dir * 60 * ease(k); }
@@ -545,7 +547,7 @@
         if (lf >= I && lf < I + 4) flash = 'guard';
       } else if (lf >= I) {                                           // 피격: 넉백
         const amt = r.crit ? 120 : 65;
-        const kb = amt * ease(Math.min(1, (lf - I) / 4)) * (1 - ease((lf - I - 6) / 12));
+        const kb = amt * ease(Math.min(1, (lf - I) / 4)) * (1 - ease((lf - I - 5) / 8));
         x -= dir * kb + (ev.hits.length > 1 && lf < I + 8 ? Math.sin(lf * 3) * 6 : 0);
         rot = -0.22 * kb / amt; sx = 1 - 0.04 * kb / amt;
         if (r.crit) y -= 40 * Math.sin(Math.min(1, (lf - I) / 10) * Math.PI);
@@ -571,42 +573,45 @@
   }
 
   function sceneFight(f, m, label) {
-    const evs = m.events.slice(1, -1);
+    const evs = m.live ? m.events.filter(e => e.type === 'action') : m.events.slice(1, -1);
     const endF = evs.length * ACT;
-    const done = f >= endF;
-    const idx = clamp(Math.floor(f / ACT), 0, evs.length - 1);
-    const lf = f - idx * ACT;
-    const ev = evs[idx];
+    const waiting = !!m.live && m.winner == null && f >= endF; // 조작 모드: 플레이어 입력 대기
+    const done = f >= endF && !waiting;
+    const idx = clamp(Math.floor(f / ACT), 0, Math.max(0, evs.length - 1));
+    const lf = waiting ? ACT : f - idx * ACT;
+    const ev = evs[idx] || { actor: 0, fx: 'rest', hits: [], notes: [], name: '', state: m.events[0].state };
     const I = impactOf(ev), r = resultOf(ev);
     const prev = idx === 0 ? m.events[0].state : evs[idx - 1].state;
     const cur = done ? m.events.at(-1).state : ev.state;
-    const k = done ? 1 : ev.hits.length ? ease((lf - I) / 6) : ease((lf - 6) / 8);
+    const k = done || waiting ? 1 : ev.hits.length ? ease((lf - I) / 6) : ease((lf - 6) / 8);
     const st = [0, 1].map(i => ({ hp: lerp(prev[i].hp, cur[i].hp, k), sta: lerp(prev[i].sta, cur[i].sta, k), status: (k > 0.5 ? cur : prev)[i].status }));
 
     let shake = 0;
     if (!done && lf >= I && lf < I + 6 && (r.crit || ['smash', 'slam', 'storm', 'lightning', 'eightbite', 'dive'].includes(ev.fx))) shake = r.crit ? 14 : 8;
     if (!done && r.block && lf >= I && lf < I + 3) shake = Math.max(shake, 5);
+    const g = f + (m.clock || 0);
     ctx.save(); ctx.translate((hash(f) - 0.5) * shake, (hash(f + 1) - 0.5) * shake);
-    background(f, '#1b2a6b');
+    background(g, '#1b2a6b');
     ctx.fillStyle = '#1a1a22'; ctx.fillRect(-20, GROUND, W + 40, H - GROUND + 20);
     ctx.fillStyle = '#2a2a36'; ctx.fillRect(-20, GROUND, W + 40, 6);
-    if (st.some(s => s.status.includes('weather'))) { ctx.fillStyle = 'rgba(10,20,50,.25)'; ctx.fillRect(0, 0, W, H); rainDrops(f, 90, 'rgba(150,180,255,.45)'); }
+    if (st.some(s => s.status.includes('weather'))) { ctx.fillStyle = 'rgba(10,20,50,.25)'; ctx.fillRect(0, 0, W, H); rainDrops(g, 90, 'rgba(150,180,255,.45)'); }
 
     const P = [0, 1].map(i => poseOf(m, evs, i, f));
-    const a = done ? -1 : ev.actor, t = 1 - a;
+    const a = done || waiting ? -1 : ev.actor, t = 1 - a;
     // 공격하는 쪽을 앞에 그린다 (막기 후 반격 중이면 방어자를 앞에)
     let order = a === 0 ? [1, 0] : [0, 1];
-    if (!done && r.counter && lf >= I + 3) order = order.reverse();
+    if (!done && !waiting && r.counter && lf >= I + 3) order = order.reverse();
+    if (waiting) order = [1, 0];
     if (done) order = m.ids[0] === m.winner ? [1, 0] : [0, 1];
     order.forEach(i => {
       if (P[i].trail) [6, 3].forEach((back, bi) => drawFighter(m, i, poseOf(m, evs, i, Math.max(0, f - back)), f - back, 0.18 + bi * 0.12));
       const loser = done && m.ids[i] !== m.winner;
       drawFighter(m, i, P[i], f, loser ? clamp(1 - (f - endF) / 40, 0.35, 1) : 1);
       // 착지 먼지
-      if (!done && i === a && MELEE.includes(ev.fx) && lf === 8) for (let d = 0; d < 8; d++) ell(P[i].x + (hash(d) - 0.5) * 140, GROUND - hash(d + 3) * 20, 14, 7, 'rgba(200,200,220,.35)');
+      if (!done && !waiting && i === a && MELEE.includes(ev.fx) && lf === 8) for (let d = 0; d < 8; d++) ell(P[i].x + (hash(d) - 0.5) * 140, GROUND - hash(d + 3) * 20, 14, 7, 'rgba(200,200,220,.35)');
     });
 
-    if (!done) {
+    if (!done && !waiting) {
       const dir = a === 0 ? 1 : -1;
       const self = ['confuse', 'rest', 'stuck', 'forge', 'fly', 'guard'].includes(ev.fx);
       const tx = self ? P[a].x : P[t].x;
@@ -645,7 +650,7 @@
 
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, H - 92, W, 92);
     const lines = [];
-    for (let i = Math.max(0, idx - 2); i <= Math.min(idx, evs.length - 1); i++) lines.push(logLine(m, evs[i]));
+    if (!m.hideLog) for (let i = Math.max(0, idx - 2); i <= Math.min(idx, evs.length - 1); i++) lines.push(logLine(m, evs[i]));
     lines.forEach((l, i) => text(l, 24, H - 74 + i * 28, 18, i === lines.length - 1 ? '#fff' : '#999', 'left', 'normal', false));
     if (done) {
       const p = ease((f - endF) / 20);
@@ -703,6 +708,8 @@
   window.Sim = {
     init(canvas, seed) { ctx = canvas.getContext('2d'); return build(seed); }, ready,
     drawFrame, FPS, get total() { return total; },
+    // 조작형 게임(game.js)에서 쓰는 그리기 함수들
+    gfx: { setCtx: c => { ctx = c; }, sceneFight, drawMonster, radar, background, text, rrect, ease, W, H, ACT },
     get timeline() { return scenes.map(({ start, dur, kind, label }) => ({ start, dur, kind, label })); }, get result() { return T; },
   };
 })();
