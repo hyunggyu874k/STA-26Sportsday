@@ -255,6 +255,8 @@
     requestAnimationFrame(loop);
   }
 
+  // play.html이 아닌 주소(예: 게시된 링크)에서는 시뮬레이션 영상 페이지가 없으므로 숨김
+  if (!location.pathname.endsWith('play.html')) $('#simLink').style.display = 'none';
   buildSelect();
   show('select');
   Sim.ready.then(() => requestAnimationFrame(loop));
